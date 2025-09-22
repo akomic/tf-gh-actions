@@ -28,11 +28,3 @@ tmp/
 # Test artifacts
 comment.md
 tfplans/
-all-tfplans/
-
-# Node modules (if using any JS tooling)
-node_modules/
-
-# Python cache
-__pycache__/
-*.pyc
