@@ -1,0 +1,72 @@
+name: 'Upload TF Plan Artifact'
+description: 'Convert binary Terraform plan to JSON and upload (binary upload optional) as artifacts'
+author: 'akomic'
+
+inputs:
+  working-directory:
+    description: 'Working directory to execute the action from'
+    required: true
+  retention-days:
+    description: 'Number of days to retain the artifact'
+    required: false
+    default: '2'
+  binary-upload:
+    description: 'Whether to upload the binary tfplan files along with JSON'
+    required: false
+    default: 'true'
+
+outputs:
+  artifact-name:
+    description: 'Name of the uploaded artifact'
+    value: ${{ steps.prepare.outputs.artifact-name }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Prepare artifacts
+      id: prepare
+      shell: bash
+      run: |
+        cd ${{ inputs.working-directory }}
+
+        CWD=$(pwd)
+
+        mkdir -p $RUNNER_TEMP/tfplan-artifacts/${{ inputs.working-directory }}
+
+        for tfplanFile in $(find . -name 'tfplan.tfplan');do
+            tfDir=$(dirname "$tfplanFile" |sed -e 's/^.\///g')
+            tgPath=$(echo $tfDir |awk '{split($0,a,".terragrunt-cache/"); sub(/\/$/, "", a[1]); print a[1]}')
+
+            echo "Processing: [$tgPath]"
+
+            finalDir="$RUNNER_TEMP/tfplan-artifacts/${{ inputs.working-directory }}"
+            if [ ! -z "$tgPath" ]; then
+              finalDir="$RUNNER_TEMP/tfplan-artifacts/${{ inputs.working-directory }}/${tgPath}"
+            fi
+            mkdir -p "${finalDir}"
+
+            cd $tfDir
+            terraform show -json "tfplan.tfplan" > "tfplan.json"
+            if [ "${{ inputs.binary-upload }}" = "true" ]; then
+              cp "tfplan.tfplan"  "${finalDir}/tfplan.tfplan"
+            fi
+            cp "tfplan.json" "${finalDir}/tfplan.json"
+            cd $CWD
+        done
+
+        echo "Prepared artifacts:"
+        find $RUNNER_TEMP/tfplan-artifacts -type f
+
+        sanitize_path() {
+          echo -n "$1" | sed 's/[^a-zA-Z0-9._-]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g'
+        }
+
+        echo "artifact-name=$(sanitize_path "${{ inputs.working-directory }}")" >> $GITHUB_OUTPUT
+
+    - name: Upload all tfplan artifacts
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: tfplan-collection-${{ steps.prepare.outputs.artifact-name}}
+        path: $RUNNER_TEMP/tfplan-artifacts
+        retention-days: ${{ inputs.retention-days }}
+        overwrite: true

@@ -1,0 +1,62 @@
+name: 'Terragrunt PR Matrix'
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        working_dir: 
+          - 'infrastructure/dev'
+          - 'infrastructure/staging'
+          - 'infrastructure/prod'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        uses: ./install-dependencies
+        with:
+          terraform-version: '1.9.8'
+          terragrunt-version: '0.83.2'
+          tf-commenter-version: '1.1.0'
+
+      - name: Terragrunt Plan
+        run: |
+          cd ${{ matrix.working_dir }}
+          terragrunt run-all plan -out=tfplan.tfplan
+
+      - name: Upload plan artifact
+        uses: ./upload-tfplan
+        with:
+          working-directory: ${{ matrix.working_dir }}
+          binary-upload: 'true'
+
+  comment:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [plan]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        uses: ./install-dependencies
+        with:
+          terraform-version: '1.9.8'
+          terragrunt-version: '0.83.2'
+          tf-commenter-version: '1.1.0'
+
+      - name: Generate PR comment
+        uses: ./generate-pr-comment
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}

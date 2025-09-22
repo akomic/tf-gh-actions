@@ -1,0 +1,96 @@
+name: Test Actions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  tf_version: '1.12.2'
+  tg_version: '0.84.1'
+  tf_commenter_version: '1.1.0'
+
+jobs:
+  test-install-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Test install-dependencies
+        uses: ./install-dependencies
+        with:
+          terraform-version: ${{ env.tf_version }}
+          terragrunt-version: ${{ env.tg_version }}
+          tf-commenter-version: ${{ env.tf_commenter_version }}
+      
+      - name: Verify installations
+        run: |
+          terraform version
+          terragrunt version
+          tf-plan-commenter --version
+
+  test-upload-download:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        uses: ./install-dependencies
+        with:
+          terraform-version: ${{ env.tf_version }}
+          terragrunt-version: ${{ env.tg_version }}
+          tf-commenter-version: 'none'
+      
+      - name: Create test terraform
+        run: |
+          mkdir -p test-tf
+          cd test-tf
+          cat > main.tf << 'EOF'
+          resource "null_resource" "test" {
+            triggers = {
+              timestamp = timestamp()
+            }
+          }
+          EOF
+          terraform init
+          terraform plan -out=tfplan.tfplan
+      
+      - name: Test upload-tfplan
+        uses: ./upload-tfplan
+        with:
+          working-directory: 'test-tf'
+          binary-upload: 'false'
+      
+      - name: Test download-tfplan
+        uses: ./download-tfplan
+
+  test-pr-comment:
+    runs-on: ubuntu-latest
+    needs: test-upload-download
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install dependencies
+        uses: ./install-dependencies
+        with:
+          terraform-version: ${{ env.tf_version }}
+          terragrunt-version: ${{ env.tg_version }}
+          tf-commenter-version: ${{ env.tf_commenter_version }}
+      
+      - name: Test generate-pr-comment
+        uses: ./generate-pr-comment
+        with:
+          post-comment: 'false'  # Don't spam PRs
+          output-file: 'test-comment.md'
+      
+      - name: Verify comment file
+        run: |
+          if [ -f "test-comment.md" ]; then
+            echo "Comment file generated successfully"
+            cat test-comment.md
+          else
+            echo "Comment file not found"
+            exit 1
+          fi

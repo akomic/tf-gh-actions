@@ -1,0 +1,38 @@
+# Terraform files
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfplan
+.terraform/
+.terraform.lock.hcl
+
+# Terragrunt files
+.terragrunt-cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+**/*~
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.log
+tmp/
+
+# Test artifacts
+comment.md
+tfplans/
+all-tfplans/
+
+# Node modules (if using any JS tooling)
+node_modules/
+
+# Python cache
+__pycache__/
+*.pyc

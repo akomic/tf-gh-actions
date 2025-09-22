@@ -1,0 +1,55 @@
+name: 'Terragrunt PR'
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        uses: ./install-dependencies
+        with:
+          terraform-version: '1.9.8'
+          terragrunt-version: '0.83.2'
+          tf-commenter-version: '1.1.0'
+
+      - name: Terragrunt Plan
+        run: |
+          cd infrastructure
+          terragrunt run-all plan -out=tfplan.tfplan
+
+      - name: Upload plan artifact
+        uses: ./upload-tfplan
+        with:
+          working-directory: 'infrastructure'
+          binary-upload: 'false'
+
+  comment:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [plan]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        uses: ./install-dependencies
+        with:
+          terraform-version: '1.9.8'
+          terragrunt-version: '0.83.2'
+          tf-commenter-version: '1.1.0'
+
+      - name: Generate PR comment
+        uses: ./generate-pr-comment
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}

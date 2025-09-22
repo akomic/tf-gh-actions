@@ -1,0 +1,47 @@
+name: 'Terragrunt Merge Matrix'
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        working_dir: 
+          - 'infrastructure/dev'
+          - 'infrastructure/staging'
+          - 'infrastructure/prod'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        uses: ./install-dependencies
+        with:
+          terraform-version: '1.9.8'
+          terragrunt-version: '0.83.2'
+
+      - name: Download plan artifacts
+        uses: ./download-tfplan
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply
+        run: |
+          cd ${{ matrix.working_dir }}
+          if [ -d "$RUNNER_TEMP/tfplans/${{ matrix.working_dir }}" ]; then
+            echo "Applying tfplans for ${{ matrix.working_dir }}"
+            cp -r $RUNNER_TEMP/tfplans/${{ matrix.working_dir }} tfplans
+            terragrunt apply --all --out-dir tfplans
+          else
+            echo "No tfplan found for ${{ matrix.working_dir }}, skipping apply."
+            exit 1
+          fi

@@ -1,0 +1,54 @@
+name: 'Download TFPlan Artifacts'
+description: 'Download tfplan artifacts'
+author: 'akomic'
+
+inputs:
+  github-token:
+    description: 'GitHub token for posting comments'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  comment-file:
+    description: 'Path to the generated comment file'
+    value: ${{ steps.generate.outputs.comment-file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Download tfplan artifacts
+      id: download
+      shell: bash
+      run: |
+        echo "Processing tfplan artifacts..."
+
+        PR_DATA=$(gh api repos/${{ github.repository }}/commits/${{ github.sha }}/pulls --jq '.[0]')
+        PR_NUMBER=$(echo "$PR_DATA" | jq -r '.number')
+        MERGE_SHA=$(echo "$PR_DATA" | jq -r '.merge_commit_sha')
+        SHA=$(echo "$PR_DATA" | jq -r '.head.sha')
+
+        echo "PR_NUMBER: ${PR_NUMBER}"
+        echo "MERGE_SHA: ${MERGE_SHA}"
+        echo "SHA: ${{ github.sha }}"
+
+        RUN_ID=$(gh api \
+          repos/${{ github.repository }}/actions/runs \
+                --jq ".workflow_runs[] | select(.head_sha==\"${SHA}\") | .id" \
+                | head -n 1)
+        echo "RUN_ID: ${RUN_ID}"
+
+        ARTIFACT_DATA=$(gh api repos/${{ github.repository }}/actions/runs/${RUN_ID}/artifacts \
+          --jq '.artifacts[] | (.id|tostring) + "|" + .name')
+
+        mkdir -p $RUNNER_TEMP/tfplans
+        for artifactLine in $ARTIFACT_DATA;do
+          ARTIFACT_ID=$(echo "$artifactLine" |cut -d'|' -f 1)
+          ARTIFACT_NAME=$(echo "$artifactLine" |cut -d'|' -f 2)
+
+          gh api repos/${{ github.repository }}/actions/artifacts/${ARTIFACT_ID}/zip > artifact.zip
+          unzip artifact.zip -d $RUNNER_TEMP/tfplans/
+        done
+        echo "Generated tfplan files in $RUNNER_TEMP/tfplans"
+        find $RUNNER_TEMP/tfplans/
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}

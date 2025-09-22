@@ -1,0 +1,56 @@
+name: 'Generate PR Comment from TF Plans'
+description: 'Download tfplan JSON artifacts and generate PR comments using go-tfplan-commenter'
+author: 'akomic'
+
+inputs:
+  output-file:
+    description: 'Output file for the generated comment'
+    required: false
+    default: 'comment.md'
+  post-comment:
+    description: 'Whether to post the comment to the PR'
+    required: false
+    default: 'true'
+  github-token:
+    description: 'GitHub token for posting comments'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  comment-file:
+    description: 'Path to the generated comment file'
+    value: ${{ steps.generate.outputs.comment-file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Download all tfplan artifacts
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+      with:
+        path: $RUNNER_TEMP/tfplan-artifacts  # all artifacts downloaded here
+        merge-multiple: true
+
+    - name: Organize tfplan JSON files and generate comment
+      id: generate
+      shell: bash
+      run: |
+        find $RUNNER_TEMP/tfplan-artifacts/ -type f
+        if [ ! -d "$RUNNER_TEMP/tfplan-artifacts" ]; then
+          echo "No $RUNNER_TEMP/tfplan-artifacts folder found"
+          exit 0
+        fi
+
+        tf-plan-commenter $RUNNER_TEMP/tfplan-artifacts/ ${{ inputs.output-file }}
+    - name: Post PR comment
+      if: inputs.post-comment == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        if [ -f "${{ inputs.output-file }}" ]; then
+          PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
+          echo "Posting comment to PR #${PR_NUMBER}"
+          gh pr comment "$PR_NUMBER" --body-file ./${{ inputs.output-file }}
+        else
+          echo "Comment file not found, skipping PR comment"
+        fi
