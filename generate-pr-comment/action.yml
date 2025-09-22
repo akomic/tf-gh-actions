@@ -24,23 +24,28 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Set artifact path
+      id: set-path
+      shell: bash
+      run: echo "artifact-path=$RUNNER_TEMP/tfplan-artifacts" >> $GITHUB_OUTPUT
+
     - name: Download all tfplan artifacts
       uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
       with:
-        path: $RUNNER_TEMP/tfplan-artifacts  # all artifacts downloaded here
+        path: ${{ steps.set-path.outputs.artifact-path }}  # all artifacts downloaded here
         merge-multiple: true
 
     - name: Organize tfplan JSON files and generate comment
       id: generate
       shell: bash
       run: |
-        find $RUNNER_TEMP/tfplan-artifacts/ -type f
-        if [ ! -d "$RUNNER_TEMP/tfplan-artifacts" ]; then
-          echo "No $RUNNER_TEMP/tfplan-artifacts folder found"
+        find ${{ steps.set-path.outputs.artifact-path }}/ -type f
+        if [ ! -d "${{ steps.set-path.outputs.artifact-path }}" ]; then
+          echo "No ${{ steps.set-path.outputs.artifact-path }} folder found"
           exit 0
         fi
 
-        tf-plan-commenter $RUNNER_TEMP/tfplan-artifacts/ ${{ inputs.output-file }}
+        tf-plan-commenter ${{ steps.set-path.outputs.artifact-path }}/ ${{ inputs.output-file }}
     - name: Post PR comment
       if: inputs.post-comment == 'true' && github.event_name == 'pull_request'
       shell: bash
