@@ -43,15 +43,20 @@ runs:
       if: steps.cache-binaries.outputs.cache-hit != 'true'
       shell: bash
       run: |
+        CWD=$(pwd)
+
         mkdir -p "$HOME/.local/bin"
 
         # Terragrunt install
         curl -sL "https://github.com/gruntwork-io/terragrunt/releases/download/v${{ inputs.terragrunt-version }}/terragrunt_linux_amd64" -o "$HOME/.local/bin/terragrunt"
 
         # Terraform install
+        mkdir -p $RUNNER_TEMP/tf-install
+        cd $RUNNER_TEMP/tf-install
         curl -sL -o terraform.zip https://releases.hashicorp.com/terraform/${{ inputs.terraform-version }}/terraform_${{ inputs.terraform-version }}_linux_amd64.zip
         unzip terraform.zip terraform
         mv terraform "$HOME/.local/bin/"
+        cd $CWD
 
         # TF plan PR commenter
         if [ "${{ inputs.tf-commenter-version }}" != "none" ]; then
