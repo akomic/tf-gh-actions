@@ -46,7 +46,9 @@ runs:
             mkdir -p "${finalDir}"
 
             cd $tfDir
-            terraform show -json "tfplan.tfplan" > "tfplan.json"
+            if [ ! -f "tfplan.json" ];then
+                terraform show -json "tfplan.tfplan" > "tfplan.json"
+            fi
             if [ "${{ inputs.binary-upload }}" = "true" ]; then
               cp "tfplan.tfplan"  "${finalDir}/tfplan.tfplan"
             fi
