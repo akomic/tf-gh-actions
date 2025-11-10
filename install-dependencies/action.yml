@@ -4,11 +4,11 @@ author: 'akomic'
 
 inputs:
   terraform-version:
-    description: 'Terraform version to install'
+    description: 'Terraform version to install, "none" to skip installation'
     required: false
     default: '1.9.8'
   terragrunt-version:
-    description: 'Terragrunt version to install'
+    description: 'Terragrunt version to install, "none" to skip installation'
     required: false
     default: '0.83.2'
   tf-commenter-version:
@@ -48,15 +48,27 @@ runs:
         mkdir -p "$HOME/.local/bin"
 
         # Terragrunt install
-        curl -sL "https://github.com/gruntwork-io/terragrunt/releases/download/v${{ inputs.terragrunt-version }}/terragrunt_linux_amd64" -o "$HOME/.local/bin/terragrunt"
+        if [ "${{ inputs.terragrunt-version }}" != "none" ]; then
+          echo "Installing terragrunt version ${{ inputs.terragrunt-version }}"
+          curl -sL "https://github.com/gruntwork-io/terragrunt/releases/download/v${{ inputs.terragrunt-version }}/terragrunt_linux_amd64" -o "$HOME/.local/bin/terragrunt"
+          chmod +x "$HOME/.local/bin/terragrunt"
+        else
+          echo "Skipping terragrunt installation"
+        fi
 
         # Terraform install
-        mkdir -p $RUNNER_TEMP/tf-install
-        cd $RUNNER_TEMP/tf-install
-        curl -sL -o terraform.zip https://releases.hashicorp.com/terraform/${{ inputs.terraform-version }}/terraform_${{ inputs.terraform-version }}_linux_amd64.zip
-        unzip terraform.zip terraform
-        mv terraform "$HOME/.local/bin/"
-        cd $CWD
+        if [ "${{ inputs.terraform-version }}" != "none" ]; then
+          echo "Installing terraform version ${{ inputs.terraform-version }}"
+          mkdir -p $RUNNER_TEMP/tf-install
+          cd $RUNNER_TEMP/tf-install
+          curl -sL -o terraform.zip https://releases.hashicorp.com/terraform/${{ inputs.terraform-version }}/terraform_${{ inputs.terraform-version }}_linux_amd64.zip
+          unzip terraform.zip terraform
+          mv terraform "$HOME/.local/bin/"
+          cd $CWD
+          chmod +x "$HOME/.local/bin/terraform"
+        else
+          echo "Skipping terraform installation"
+        fi
 
         # TF plan PR commenter
         if [ "${{ inputs.tf-commenter-version }}" != "none" ]; then
@@ -66,8 +78,6 @@ runs:
         else
           echo "Skipping tfplan-commenter installation"
         fi
-
-        chmod +x "$HOME/.local/bin/terragrunt" "$HOME/.local/bin/terraform"
 
         echo "TF_IN_AUTOMATION=true" >> $GITHUB_ENV
         echo "TF_INPUT=false" >> $GITHUB_ENV
