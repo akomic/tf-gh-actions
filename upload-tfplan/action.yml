@@ -73,7 +73,7 @@ runs:
       shell: bash
       run: |
         echo "INFO: Compressing and encrypting source files"
-        tar cf - $RUNNER_TEMP/tfplan-artifacts | 7z a -si -t7z -mx=3 -mhe=on -p"${{ inputs.password }}" ${{ steps.prepare.outputs.artifact-path }}
+        cd $RUNNER_TEMP/tfplan-artifacts && tar cf - . | 7z a -si -t7z -mx=3 -mhe=on -p"${{ inputs.password }}" ${{ steps.prepare.outputs.artifact-path }}
 
     - name: Upload all tfplan artifacts
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

@@ -67,7 +67,7 @@ runs:
       shell: bash
       run: |
         echo "INFO: Compressing and encrypting consolidated files"
-        tar cf - ${{ steps.temp.outputs.temp }}/tfplans | 7z a -si -t7z -mx=3 -mhe=on -p"${{ inputs.password }}" ${{ steps.temp.outputs.temp }}/consolidated-artifact.tar.7z
+        cd ${{ steps.temp.outputs.temp }}/tfplans && tar cf - . | 7z a -si -t7z -mx=3 -mhe=on -p"${{ inputs.password }}" ${{ steps.temp.outputs.temp }}/consolidated-artifact.tar.7z
 
     - name: Upload consolidated artifact
       if: steps.consolidate.outputs.has-artifacts == 'true'
