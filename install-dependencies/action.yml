@@ -15,6 +15,10 @@ inputs:
     description: 'TF Plan Commenter version to install, "none" to skip installation'
     required: false
     default: '1.1.0'
+  sevenzip-version:
+    description: '7z version to install, "none" to skip installation'
+    required: false
+    default: '25.01'
 
 outputs:
   cache-key:
@@ -30,14 +34,14 @@ runs:
     - name: Set cache key
       id: set-cache-key
       shell: bash
-      run: echo "cache-key=local-bin-${{ runner.os }}-${{ inputs.terraform-version }}-${{ inputs.terragrunt-version }}-${{ inputs.tf-commenter-version }}" >> $GITHUB_OUTPUT
+      run: echo "cache-key=bin-${{ runner.os }}-${{ inputs.terraform-version }}-${{ inputs.terragrunt-version }}-${{ inputs.tf-commenter-version }}-${{ inputs.sevenzip-version }}" >> $GITHUB_OUTPUT
 
     - name: Cache installed binaries
       id: cache-binaries
       uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
       with:
         path: ~/.local/bin
-        key: local-bin-${{ runner.os }}-${{ inputs.terraform-version }}-${{ inputs.terragrunt-version }}-${{ inputs.tf-commenter-version }}
+        key: ${{ steps.set-cache-key.outputs.cache-key }}
 
     - name: Install dependencies
       if: steps.cache-binaries.outputs.cache-hit != 'true'
@@ -77,6 +81,20 @@ runs:
           chmod +x "$HOME/.local/bin/tf-plan-commenter"
         else
           echo "Skipping tfplan-commenter installation"
+        fi
+
+        # 7z install
+        if [ "${{ inputs.sevenzip-version }}" != "none" ]; then
+          echo "Installing 7z version ${{ inputs.sevenzip-version }}"
+          mkdir -p $RUNNER_TEMP/7z-install
+          cd $RUNNER_TEMP/7z-install
+          curl -sL https://github.com/ip7z/7zip/releases/download/${{ inputs.sevenzip-version }}/7z$(echo "${{ inputs.sevenzip-version }}" | tr -d .)-linux-x64.tar.xz -o 7z.tar.xz
+          tar -xf 7z.tar.xz 7zz
+          mv 7zz "$HOME/.local/bin/7z"
+          chmod +x "$HOME/.local/bin/7z"
+          cd $CWD
+        else
+          echo "Skipping 7z installation"
         fi
 
         echo "TF_IN_AUTOMATION=true" >> $GITHUB_ENV

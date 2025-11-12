@@ -3,6 +3,9 @@ description: 'Download tfplan artifacts'
 author: 'akomic'
 
 inputs:
+  password:
+    description: 'Password for decrypting artifacts'
+    required: true
   github-token:
     description: 'GitHub token for posting comments'
     required: false
@@ -37,17 +40,38 @@ runs:
                 | head -n 1)
         echo "RUN_ID: ${RUN_ID}"
 
-        ARTIFACT_DATA=$(gh api --paginate repos/${{ github.repository }}/actions/runs/${RUN_ID}/artifacts \
-          --jq '.artifacts[] | (.id|tostring) + "|" + .name')
+        # Check if consolidated artifact exists
+        CONSOLIDATED_ARTIFACT=$(gh api --paginate repos/${{ github.repository }}/actions/runs/${RUN_ID}/artifacts \
+          --jq '.artifacts[] | select(.name=="tfplan-collection") | .id')
 
         mkdir -p $RUNNER_TEMP/tfplans
-        for artifactLine in $ARTIFACT_DATA;do
-          ARTIFACT_ID=$(echo "$artifactLine" |cut -d'|' -f 1)
-          ARTIFACT_NAME=$(echo "$artifactLine" |cut -d'|' -f 2)
+        
+        if [ -n "$CONSOLIDATED_ARTIFACT" ]; then
+          echo "Found consolidated artifact, downloading: $CONSOLIDATED_ARTIFACT"
+          gh api repos/${{ github.repository }}/actions/artifacts/${CONSOLIDATED_ARTIFACT}/zip > artifact.zip
+          unzip artifact.zip -d $RUNNER_TEMP/temp-artifact/
+          encrypted_file=$(find $RUNNER_TEMP/temp-artifact -name "*.tar.7z" | head -1)
+          if [ -n "$encrypted_file" ]; then
+            7z x -p"${{ inputs.password }}" "$encrypted_file" -so | tar xf - -C $RUNNER_TEMP/tfplans/
+          fi
+        else
+          echo "No consolidated artifact found, downloading individual artifacts"
+          ARTIFACT_DATA=$(gh api --paginate repos/${{ github.repository }}/actions/runs/${RUN_ID}/artifacts \
+            --jq '.artifacts[] | (.id|tostring) + "|" + .name')
 
-          gh api repos/${{ github.repository }}/actions/artifacts/${ARTIFACT_ID}/zip > artifact.zip
-          unzip artifact.zip -d $RUNNER_TEMP/tfplans/
-        done
+          for artifactLine in $ARTIFACT_DATA;do
+            ARTIFACT_ID=$(echo "$artifactLine" |cut -d'|' -f 1)
+            ARTIFACT_NAME=$(echo "$artifactLine" |cut -d'|' -f 2)
+
+            gh api repos/${{ github.repository }}/actions/artifacts/${ARTIFACT_ID}/zip > artifact.zip
+            unzip artifact.zip -d $RUNNER_TEMP/temp-artifact/
+            encrypted_file=$(find $RUNNER_TEMP/temp-artifact -name "*.tar.7z" | head -1)
+            if [ -n "$encrypted_file" ]; then
+              7z x -p"${{ inputs.password }}" "$encrypted_file" -so | tar xf - -C $RUNNER_TEMP/tfplans/
+            fi
+          done
+        fi
+        
         echo "Generated tfplan files in $RUNNER_TEMP/tfplans"
         find $RUNNER_TEMP/tfplans/
       env:

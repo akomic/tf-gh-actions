@@ -1,0 +1,80 @@
+name: 'Consolidate TFPlan Artifacts'
+description: 'Download all tfplan-collection-* artifacts, merge them, and upload as single artifact'
+author: 'akomic'
+
+inputs:
+  password:
+    description: 'Password for encrypting/decrypting artifacts'
+    required: true
+  retention-days:
+    description: 'Number of days to retain the consolidated artifact'
+    required: false
+    default: '2'
+
+outputs:
+  artifact-name:
+    description: 'Name of the consolidated artifact'
+    value: 'tfplan-collection'
+
+runs:
+  using: 'composite'
+  steps:
+    - id: temp
+      shell: bash
+      run:
+        echo "temp=${RUNNER_TEMP}" >> $GITHUB_OUTPUT
+
+    - name: Download artifacts
+      uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+      with:
+        path: ${{ steps.temp.outputs.temp }}/downloaded-artifacts
+        pattern: tfplan-collection-*
+        merge-multiple: false
+
+    - name: Decrypt and consolidate
+      id: consolidate
+      shell: bash
+      run: |
+        mkdir -p ${{ steps.temp.outputs.temp }}/tfplans
+
+        find ${{ steps.temp.outputs.temp }}/downloaded-artifacts/ -type f
+
+        # Process each downloaded artifact
+        for artifact_dir in ${{ steps.temp.outputs.temp }}/downloaded-artifacts/tfplan-collection-*; do
+          if [ -d "$artifact_dir" ]; then
+            echo "Processing artifact: $(basename "$artifact_dir")"
+            
+            # Find the encrypted file
+            encrypted_file=$(find "$artifact_dir" -name "*.tar.7z" | head -1)
+            if [ -n "$encrypted_file" ]; then
+              echo "Decrypting: $encrypted_file"
+              7z x -p"${{ inputs.password }}" "$encrypted_file" -so | tar xf - -C ${{ steps.temp.outputs.temp }}/tfplans/
+            fi
+          fi
+        done
+        
+        echo "Consolidated artifacts:"
+        find ${{ steps.temp.outputs.temp }}/tfplans -type f
+        
+        if [ -z "$(find ${{ steps.temp.outputs.temp }}/tfplans -type f)" ]; then
+          echo "has-artifacts=false" >> $GITHUB_OUTPUT
+        else
+          echo "has-artifacts=true" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create consolidated artifact
+      if: steps.consolidate.outputs.has-artifacts == 'true'
+      shell: bash
+      run: |
+        echo "INFO: Compressing and encrypting consolidated files"
+        tar cf - ${{ steps.temp.outputs.temp }}/tfplans | 7z a -si -t7z -mx=3 -mhe=on -p"${{ inputs.password }}" ${{ steps.temp.outputs.temp }}/consolidated-artifact.tar.7z
+
+    - name: Upload consolidated artifact
+      if: steps.consolidate.outputs.has-artifacts == 'true'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: tfplan-collection
+        path: ${{ steps.temp.outputs.temp }}/consolidated-artifact.tar.7z
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}
+        compression-level: 0
