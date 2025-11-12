@@ -3,6 +3,9 @@ description: 'Download tfplan JSON artifacts and generate PR comments using go-t
 author: 'akomic'
 
 inputs:
+  password:
+    description: 'Password for decrypting artifacts'
+    required: true
   output-file:
     description: 'Output file for the generated comment'
     required: false
@@ -24,28 +27,59 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Set artifact path
-      id: set-path
+    - id: temp
       shell: bash
-      run: echo "artifact-path=$RUNNER_TEMP/tfplan-artifacts" >> $GITHUB_OUTPUT
+      run:
+        echo "temp=${RUNNER_TEMP}" >> $GITHUB_OUTPUT
 
-    - name: Download all tfplan artifacts
+    - name: Try download consolidated artifact
+      id: download-consolidated
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+      continue-on-error: true
+      with:
+        name: tfplan-collection
+        path: ${{ steps.temp.outputs.temp }}/consolidated-artifact
+
+    - name: Download individual artifacts if no consolidated
+      if: steps.download-consolidated.outcome == 'failure'
       uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
       with:
-        path: ${{ steps.set-path.outputs.artifact-path }}  # all artifacts downloaded here
-        merge-multiple: true
+        path: ${{ steps.temp.outputs.temp }}/individual-artifacts
+        pattern: tfplan-collection-*
+        merge-multiple: false
 
-    - name: Organize tfplan JSON files and generate comment
+    - name: Decrypt and organize tfplan files
       id: generate
       shell: bash
       run: |
-        find ${{ steps.set-path.outputs.artifact-path }}/ -type f
-        if [ ! -d "${{ steps.set-path.outputs.artifact-path }}" ]; then
-          echo "No ${{ steps.set-path.outputs.artifact-path }} folder found"
+        mkdir -p ${{ steps.temp.outputs.temp }}/tfplan-artifacts
+        
+        if [ "${{ steps.download-consolidated.outcome }}" == "success" ]; then
+          echo "Using consolidated artifact"
+          encrypted_file=$(find ${{ steps.temp.outputs.temp }}/consolidated-artifact -name "*.tar.7z" | head -1)
+          if [ -n "$encrypted_file" ]; then
+            7z x -p"${{ inputs.password }}" "$encrypted_file" -so | tar xf - -C ${{ steps.temp.outputs.temp }}/tfplan-artifacts/
+          fi
+        else
+          echo "Using individual artifacts"
+          for artifact_dir in ${{ steps.temp.outputs.temp }}/individual-artifacts/tfplan-collection-*; do
+            if [ -d "$artifact_dir" ]; then
+              encrypted_file=$(find "$artifact_dir" -name "*.tar.7z" | head -1)
+              if [ -n "$encrypted_file" ]; then
+                7z x -p"${{ inputs.password }}" "$encrypted_file" -so | tar xf - -C ${{ steps.temp.outputs.temp }}/tfplan-artifacts/
+              fi
+            fi
+          done
+        fi
+        
+        find ${{ steps.temp.outputs.temp }}/tfplan-artifacts/ -type f
+        if [ ! -d "${{ steps.temp.outputs.temp }}/tfplan-artifacts" ]; then
+          echo "No tfplan artifacts found"
           exit 0
         fi
 
-        tf-plan-commenter ${{ steps.set-path.outputs.artifact-path }}/ ${{ inputs.output-file }}
+        tf-plan-commenter ${{ steps.temp.outputs.temp }}/tfplan-artifacts/ ${{ inputs.output-file }}
+        
     - name: Post PR comment
       if: inputs.post-comment == 'true' && github.event_name == 'pull_request'
       shell: bash
