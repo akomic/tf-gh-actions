@@ -39,12 +39,12 @@ runs:
       id: generate
       shell: bash
       run: |
-        find ${{ steps.set-path.outputs.artifact-path }}/ -type f
         if [ ! -d "${{ steps.set-path.outputs.artifact-path }}" ]; then
           echo "No ${{ steps.set-path.outputs.artifact-path }} folder found"
           exit 0
         fi
 
+        find ${{ steps.set-path.outputs.artifact-path }}/ -type f
         tf-plan-commenter ${{ steps.set-path.outputs.artifact-path }}/ ${{ inputs.output-file }}
     - name: Post PR comment
       if: inputs.post-comment == 'true' && github.event_name == 'pull_request'
