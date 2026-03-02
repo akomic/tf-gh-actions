@@ -32,6 +32,7 @@ jobs:
       - name: Download plan artifacts
         uses: ./download-tfplan
         with:
+          password: ${{ secrets.TFPLAN_PASSWORD }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Apply

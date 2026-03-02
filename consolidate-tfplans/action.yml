@@ -35,22 +35,15 @@ runs:
       id: consolidate
       shell: bash
       run: |
+        set -o pipefail
         mkdir -p ${{ steps.temp.outputs.temp }}/tfplans
 
         find ${{ steps.temp.outputs.temp }}/downloaded-artifacts/ -type f
 
         # Process each downloaded artifact
-        for artifact_dir in ${{ steps.temp.outputs.temp }}/downloaded-artifacts/tfplan-collection-*; do
-          if [ -d "$artifact_dir" ]; then
-            echo "Processing artifact: $(basename "$artifact_dir")"
-            
-            # Find the encrypted file
-            encrypted_file=$(find "$artifact_dir" -name "*.tar.7z" | head -1)
-            if [ -n "$encrypted_file" ]; then
-              echo "Decrypting: $encrypted_file"
-              7z x -p"${{ inputs.password }}" "$encrypted_file" -so | tar xf - -C ${{ steps.temp.outputs.temp }}/tfplans/
-            fi
-          fi
+        find ${{ steps.temp.outputs.temp }}/downloaded-artifacts/ -name "*.tar.7z" | while read encrypted_file; do
+          echo "Decrypting: $encrypted_file"
+          $HOME/.local/bin/7z x -p"${{ inputs.password }}" "$encrypted_file" -so | tar xf - -C ${{ steps.temp.outputs.temp }}/tfplans/
         done
         
         echo "Consolidated artifacts:"
@@ -67,7 +60,7 @@ runs:
       shell: bash
       run: |
         echo "INFO: Compressing and encrypting consolidated files"
-        cd ${{ steps.temp.outputs.temp }}/tfplans && tar cf - . | 7z a -si -t7z -mx=3 -mhe=on -p"${{ inputs.password }}" ${{ steps.temp.outputs.temp }}/consolidated-artifact.tar.7z
+        cd ${{ steps.temp.outputs.temp }}/tfplans && tar cf - . | $HOME/.local/bin/7z a -si -t7z -mx=3 -mhe=on -p"${{ inputs.password }}" ${{ steps.temp.outputs.temp }}/consolidated-artifact.tar.7z
 
     - name: Upload consolidated artifact
       if: steps.consolidate.outputs.has-artifacts == 'true'

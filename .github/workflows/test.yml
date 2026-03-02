@@ -60,6 +60,7 @@ jobs:
         uses: ./upload-tfplan
         with:
           working-directory: 'test-tf'
+          password: ${{ secrets.TFPLAN_PASSWORD }}
           binary-upload: 'false'
 
   test-pr-comment:
@@ -79,6 +80,7 @@ jobs:
       - name: Test generate-pr-comment
         uses: ./generate-pr-comment
         with:
+          password: ${{ secrets.TFPLAN_PASSWORD }}
           post-comment: 'false'  # Don't spam PRs
           output-file: 'test-comment.md'
       

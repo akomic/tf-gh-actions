@@ -23,6 +23,7 @@ runs:
       id: download
       shell: bash
       run: |
+        set -o pipefail
         echo "Processing tfplan artifacts..."
 
         PR_DATA=$(gh api repos/${{ github.repository }}/commits/${{ github.sha }}/pulls --jq '.[0]')
@@ -50,10 +51,9 @@ runs:
           echo "Found consolidated artifact, downloading: $CONSOLIDATED_ARTIFACT"
           gh api repos/${{ github.repository }}/actions/artifacts/${CONSOLIDATED_ARTIFACT}/zip > artifact.zip
           unzip artifact.zip -d $RUNNER_TEMP/temp-artifact/
-          encrypted_file=$(find $RUNNER_TEMP/temp-artifact -name "*.tar.7z" | head -1)
-          if [ -n "$encrypted_file" ]; then
-            7z x -p"${{ inputs.password }}" "$encrypted_file" -so | tar xf - -C $RUNNER_TEMP/tfplans/
-          fi
+          find $RUNNER_TEMP/temp-artifact -name "*.tar.7z" | while read encrypted_file; do
+            $HOME/.local/bin/7z x -p"${{ inputs.password }}" "$encrypted_file" -so | tar xf - -C $RUNNER_TEMP/tfplans/
+          done
         else
           echo "No consolidated artifact found, downloading individual artifacts"
           ARTIFACT_DATA=$(gh api --paginate repos/${{ github.repository }}/actions/runs/${RUN_ID}/artifacts \
@@ -65,10 +65,10 @@ runs:
 
             gh api repos/${{ github.repository }}/actions/artifacts/${ARTIFACT_ID}/zip > artifact.zip
             unzip artifact.zip -d $RUNNER_TEMP/temp-artifact/
-            encrypted_file=$(find $RUNNER_TEMP/temp-artifact -name "*.tar.7z" | head -1)
-            if [ -n "$encrypted_file" ]; then
-              7z x -p"${{ inputs.password }}" "$encrypted_file" -so | tar xf - -C $RUNNER_TEMP/tfplans/
-            fi
+            find $RUNNER_TEMP/temp-artifact -name "*.tar.7z" | while read encrypted_file; do
+              $HOME/.local/bin/7z x -p"${{ inputs.password }}" "$encrypted_file" -so | tar xf - -C $RUNNER_TEMP/tfplans/
+            done
+            rm -rf $RUNNER_TEMP/temp-artifact
           done
         fi
         

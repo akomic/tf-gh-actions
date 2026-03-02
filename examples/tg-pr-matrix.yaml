@@ -39,6 +39,7 @@ jobs:
         uses: ./upload-tfplan
         with:
           working-directory: ${{ matrix.working_dir }}
+          password: ${{ secrets.TFPLAN_PASSWORD }}
           binary-upload: 'true'
 
   comment:
@@ -59,4 +60,5 @@ jobs:
       - name: Generate PR comment
         uses: ./generate-pr-comment
         with:
+          password: ${{ secrets.TFPLAN_PASSWORD }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
