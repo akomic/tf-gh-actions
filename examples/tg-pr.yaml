@@ -32,6 +32,7 @@ jobs:
         uses: ./upload-tfplan
         with:
           working-directory: 'infrastructure'
+          password: ${{ secrets.TFPLAN_PASSWORD }}
           binary-upload: 'false'
 
   comment:
@@ -52,4 +53,5 @@ jobs:
       - name: Generate PR comment
         uses: ./generate-pr-comment
         with:
+          password: ${{ secrets.TFPLAN_PASSWORD }}
           github-token: ${{ secrets.GITHUB_TOKEN }}

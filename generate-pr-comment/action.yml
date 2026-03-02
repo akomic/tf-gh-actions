@@ -32,48 +32,27 @@ runs:
       run:
         echo "temp=${RUNNER_TEMP}" >> $GITHUB_OUTPUT
 
-    - name: Try download consolidated artifact
-      id: download-consolidated
-      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
-      continue-on-error: true
-      with:
-        name: tfplan-collection
-        path: ${{ steps.temp.outputs.temp }}/consolidated-artifact
-
-    - name: Download individual artifacts if no consolidated
-      if: steps.download-consolidated.outcome == 'failure'
+    - name: Download tfplan artifacts
       uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
       with:
-        path: ${{ steps.temp.outputs.temp }}/individual-artifacts
-        pattern: tfplan-collection-*
+        path: ${{ steps.temp.outputs.temp }}/downloaded-artifacts
+        pattern: tfplan-collection*
         merge-multiple: false
 
     - name: Decrypt and organize tfplan files
       id: generate
       shell: bash
       run: |
+        set -o pipefail
         mkdir -p ${{ steps.temp.outputs.temp }}/tfplan-artifacts
-        
-        if [ "${{ steps.download-consolidated.outcome }}" == "success" ]; then
-          echo "Using consolidated artifact"
-          encrypted_file=$(find ${{ steps.temp.outputs.temp }}/consolidated-artifact -name "*.tar.7z" | head -1)
-          if [ -n "$encrypted_file" ]; then
-            7z x -p"${{ inputs.password }}" "$encrypted_file" -so | tar xf - -C ${{ steps.temp.outputs.temp }}/tfplan-artifacts/
-          fi
-        else
-          echo "Using individual artifacts"
-          for artifact_dir in ${{ steps.temp.outputs.temp }}/individual-artifacts/tfplan-collection-*; do
-            if [ -d "$artifact_dir" ]; then
-              encrypted_file=$(find "$artifact_dir" -name "*.tar.7z" | head -1)
-              if [ -n "$encrypted_file" ]; then
-                7z x -p"${{ inputs.password }}" "$encrypted_file" -so | tar xf - -C ${{ steps.temp.outputs.temp }}/tfplan-artifacts/
-              fi
-            fi
-          done
-        fi
+
+        find ${{ steps.temp.outputs.temp }}/downloaded-artifacts/ -name "*.tar.7z" | while read encrypted_file; do
+          echo "Decrypting: $encrypted_file"
+          $HOME/.local/bin/7z x -p"${{ inputs.password }}" "$encrypted_file" -so | tar xf - -C ${{ steps.temp.outputs.temp }}/tfplan-artifacts/
+        done
         
         find ${{ steps.temp.outputs.temp }}/tfplan-artifacts/ -type f
-        if [ ! -d "${{ steps.temp.outputs.temp }}/tfplan-artifacts" ]; then
+        if [ -z "$(find ${{ steps.temp.outputs.temp }}/tfplan-artifacts -type f)" ]; then
           echo "No tfplan artifacts found"
           exit 0
         fi
