@@ -45,6 +45,7 @@ runs:
       run: |
         set -o pipefail
         mkdir -p ${{ steps.temp.outputs.temp }}/tfplan-artifacts
+        mkdir -p ${{ steps.temp.outputs.temp }}/downloaded-artifacts
 
         find ${{ steps.temp.outputs.temp }}/downloaded-artifacts/ -name "*.tar.7z" | while read encrypted_file; do
           echo "Decrypting: $encrypted_file"
