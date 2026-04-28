@@ -29,19 +29,30 @@ runs:
         PR_DATA=$(gh api repos/${{ github.repository }}/commits/${{ github.sha }}/pulls --jq '.[0]')
         PR_NUMBER=$(echo "$PR_DATA" | jq -r '.number')
         MERGE_SHA=$(echo "$PR_DATA" | jq -r '.merge_commit_sha')
-        SHA=$(echo "$PR_DATA" | jq -r '.head.sha')
 
         echo "PR_NUMBER: ${PR_NUMBER}"
         echo "MERGE_SHA: ${MERGE_SHA}"
-        echo "SHA: ${{ github.sha }}"
 
-        RUN_ID=$(gh api \
-          "repos/${{ github.repository }}/actions/runs?head_sha=${SHA}" \
-                --jq '.workflow_runs[0].id')
+        # Walk PR commits (newest first) to find one with a workflow run
+        COMMITS=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/commits?per_page=100" \
+          --jq '[.[].sha] | reverse | .[]')
+
+        RUN_ID=""
+        for SHA in $COMMITS; do
+          RUN_ID=$(gh api \
+            "repos/${{ github.repository }}/actions/runs?head_sha=${SHA}&event=pull_request" \
+            --jq '.workflow_runs[0].id')
+          if [ -n "$RUN_ID" ] && [ "$RUN_ID" != "null" ]; then
+            echo "Found workflow run for commit ${SHA}"
+            break
+          fi
+          RUN_ID=""
+          echo "No workflow run for commit ${SHA}, trying previous..."
+        done
         echo "RUN_ID: ${RUN_ID}"
 
         if [ -z "$RUN_ID" ]; then
-          echo "::error::Could not find a workflow run for PR head SHA: ${SHA}"
+          echo "::error::Could not find any workflow run across PR #${PR_NUMBER} commits"
           exit 1
         fi
 
